@@ -36,7 +36,7 @@
 
 import roslib
 import rospy
-roslib.load_manifest('bvt_pantilt')
+#roslib.load_manifest('bvt_pantilt')
 
 import numpy as np
 import time
@@ -45,8 +45,9 @@ import traceback
 from driver_pantilt import PanTiltDriver, ProtocolException
 from serial import SerialException
 
-from bvt_pantilt.msg import PanTiltOrientation
+from orientation_msgs.msg import PanTiltOrientation
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Int32 ######
 
 # topics
 TOPIC_ORIENT = 'pantilt/orientation'
@@ -59,6 +60,21 @@ TIMER_JOINT = 0.1   # default 10Hz for joint_state info publishing
 OFFSET_PAN = 0      # (optional) add an offset to pan (nessie: 45 - 17.5)
 OFFSET_TILT = 0     # (optional) add an offset to tilt (nessie: 0)
 MIN_DELTA = 0.55    # minimum angle difference
+
+# class FlagListener:
+
+#     def __init__(self):
+#         self.my_flag = "Stop"
+
+#     def callback(data):
+#         self.my_flag = data.
+
+my_flag = "Stop"
+
+def FlagCallBack(data):
+    global my_flag
+    my_flag = data.data
+
 
 
 class PanTiltInterface(object):
@@ -85,13 +101,19 @@ class PanTiltInterface(object):
         self.MAX_ELEVATION = 70 + offset_tilt   # limit tilt taking into account the offset (-)
 
         # zero config
+        self.init_vel = 1   # set initial velocity to 1 deg/s
         self.init_theta = 180 - offset_pan  # set initial azimuth to 0      (nessie: 135 + 17.5)
         self.init_phi = 180 - offset_tilt    # set initial elevation to 0    (nessie: 180)
 
         # initialize driver
         self.dev = PanTiltDriver(self.serial_config)
+        self.pos_az_spd = rospy.get_param('position_az_spd') #####
+        self.pos_el_spd = rospy.get_param('position_el_spd') #####
+        self.scan_az_spd = rospy.get_param('scan_az_spd') #####
+        self.scan_el_spd = rospy.get_param('scan_el_spd') #####
         self.theta_des = self.init_theta
         self.phi_des = self.init_phi
+        self.vel_des = 2.0
         self.prev_theta = 0.0
         self.prev_phi = 0.0
         self.azimuth = 0.0
@@ -134,6 +156,7 @@ class PanTiltInterface(object):
         # geometry transformation
         az = data.azimuth
         el = data.elevation
+        vel = data.velocity
 
         # wrap angles between (-180,+180)
         while az > 180:
@@ -160,6 +183,7 @@ class PanTiltInterface(object):
         # store desired orientation
         self.theta_des = az - self.offset_pan
         self.phi_des = el - self.offset_tilt
+        self.vel_des = vel
 
         # extra info
         rospy.loginfo('[PT]: az: {0:0.2f}, el: {1:0.2f} -- theta: {2:0.2f}, phi: {3:0.2f}'.format(data.azimuth, data.elevation, az, el))
@@ -221,8 +245,16 @@ class PanTiltInterface(object):
                     # if theta_delta > MIN_DELTA or phi_delta > MIN_DELTA:
                     if self.new_request:
                         # send commands
+                        ###################################
+                        #self.dev.set_position_velocity(self.init_vel)
+
+                        self.dev.set_azimuth_velocity(self.vel_des)
+                        self.dev.set_elevation_velocity(self.vel_des)
+                        
+                        ###################################
                         self.dev.set_pan_angle(self.theta_des)
                         self.dev.set_tilt_angle(self.phi_des)
+                        
                         self.new_request = True
 
                     # extra info
@@ -251,6 +283,8 @@ def main():
     rospy.init_node('pantilt_node')
     name = rospy.get_name()
 
+    rospy.Subscriber("sonar_flag_state", Int32, FlagCallBack) #####
+
     rospy.loginfo('%s initializing ...', name)
 
     # local flags
@@ -264,7 +298,7 @@ def main():
             verbose = True
 
     # load parameters
-    serial_port = rospy.get_param('~/serial_port', default='/vdev/tty_pantilt')
+    serial_port = rospy.get_param('~/serial_port', default='/dev/ttyUSB0')
 
     try:
         op = int(rospy.get_param('~/offset_pan', default=OFFSET_PAN))
