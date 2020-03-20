@@ -45,7 +45,7 @@ import traceback
 from driver_pantilt import PanTiltDriver, ProtocolException
 from serial import SerialException
 
-from orientation_msgs.msg import PanTiltOrientation
+from bvt_pantilt.msg import PanTiltOrientation
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Int32 ######
 
@@ -107,10 +107,6 @@ class PanTiltInterface(object):
 
         # initialize driver
         self.dev = PanTiltDriver(self.serial_config)
-        self.pos_az_spd = rospy.get_param('position_az_spd') #####
-        self.pos_el_spd = rospy.get_param('position_el_spd') #####
-        self.scan_az_spd = rospy.get_param('scan_az_spd') #####
-        self.scan_el_spd = rospy.get_param('scan_el_spd') #####
         self.theta_des = self.init_theta
         self.phi_des = self.init_phi
         self.vel_des = 2.0
